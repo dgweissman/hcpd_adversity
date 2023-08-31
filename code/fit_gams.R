@@ -42,7 +42,7 @@ myelin_col_index <- grep("myelin_glasser_v", colnames(hcpd_data))
 net_col_index <- grep("_myelin", colnames(hcpd_data))
 
 ## Regional labels from Glasser parcellation
-glasser_parcel_labels <- read.table("/ncf/hcp/data/analyses/myelin/parcellations/glasser360NodeNames.txt",  header=FALSE)
+glasser_parcel_labels <- read.table("glasser360NodeNames.txt",  header=FALSE)
 
 ## Test GAM
 test_gam <- gam(mean_wholebrain_T1wT2w ~ p_grade + s(age) + sex + site + Reference.Voltage + Mean.Pseudo.Transmit.Map + T2..Dropout.Threshold + Smoothing.FWHM.mm + Pseudotransmit.Reference.Value + Correction.Equation.Slope + Corrected.CSF.Regressor, data=hcpd_data, method="REML")
@@ -87,6 +87,40 @@ glasser_p_grade_tstat[uncorrected_sig_index]
 hist(glasser_p_grade_tstat, col="slategray3")
 
 write.table(glasser_p_grade_tstat, "/ncf/hcp/data/analyses/myelin/Adversity_Project/results/n925_pgrade_tstat.txt", row.names=FALSE, col.names=FALSE)
+
+#############################################
+# Estimate p_grade effect on NETWORK myelin ##
+#############################################
+network_gam_models <- NULL
+m <- NULL
+
+## Specify covariates
+full_covars=" ~  p_grade + s(age) + sex + site + Reference.Voltage + Mean.Pseudo.Transmit.Map + T2..Dropout.Threshold + Smoothing.FWHM.mm + Pseudotransmit.Reference.Value + Correction.Equation.Slope + Corrected.CSF.Regressor"   
+reduced_covars=" ~  s(age) + sex + site + Reference.Voltage + Mean.Pseudo.Transmit.Map + T2..Dropout.Threshold + Smoothing.FWHM.mm + Pseudotransmit.Reference.Value + Correction.Equation.Slope + Corrected.CSF.Regressor"   
+
+## Apply GAM across brain regions (columns of data-frame)
+m <- lapply(names(hcpd_data[,net_col_index]), function(x) {as.formula(paste(x, full_covars, sep=""))})
+m2<- lapply(names(hcpd_data[,net_col_index]), function(x) {as.formula(paste(x, full_covars, sep=""))})
+
+## Extract GAM pvals 
+network_gam_models <- lapply(m, function(x) {gam(formula = x, data=hcpd_data, method="REML")})
+network_pgrade_pvals <- lapply(network_gam_models, function(x) { summary(x)$p.table[2,4]})
+network_pgrade_pvals <- unlist(network_pgrade_pvals)
+network_pgrade_tstat <-unlist(lapply(network_gam_models, function(x) { summary(x)$p.table[2,3]}))
+
+## Multiple Comparison correction
+network_logINR_pvals_corrected <- p.adjust(network_logINR_pvals, method="holm")
+
+corrected_sig_index <- which(network_logINR_pvals_corrected < 0.05)
+length(corrected_sig_index)
+
+uncorrected_sig_index <- which(network_logINR_pvals < 0.005)
+length(uncorrected_sig_index)
+# glasser_parcel_labels[uncorrected_sig_index,1]
+network_logINR_pvals[uncorrected_sig_index]
+network_logINR_tstat[uncorrected_sig_index]
+
+
 
 ##############################################
 # Estimate logINR effect on regional myelin ##
@@ -302,3 +336,74 @@ for (a in 1:12){
   }
 }
 write.csv(network.p_grade.ROPE,"network.p_grade.ROPE.csv")
+
+## SES Composite
+# Calculate Composite
+hcpd_data$SES_Composite<-(scale(hcpd_data$p_grade)+scale(hcpd_data$INR))/2
+# Repeat Regional Myelin Analyses
+glasser_gam_results <- NULL
+mod <- NULL
+
+## Specify covariates
+full_covars=" ~  SES_Composite + s(age) + sex + site + Reference.Voltage + Mean.Pseudo.Transmit.Map + T2..Dropout.Threshold + Smoothing.FWHM.mm + Pseudotransmit.Reference.Value + Correction.Equation.Slope + Corrected.CSF.Regressor"   
+reduced_covars=" ~  s(age) + sex + site + Reference.Voltage + Mean.Pseudo.Transmit.Map + T2..Dropout.Threshold + Smoothing.FWHM.mm + Pseudotransmit.Reference.Value + Correction.Equation.Slope + Corrected.CSF.Regressor"   
+
+## Apply GAM across brain regions (columns of data-frame)
+m <- lapply(names(hcpd_data[,myelin_col_index]), function(x) {as.formula(paste(x, full_covars, sep=""))})
+m2<- lapply(names(hcpd_data[,myelin_col_index]), function(x) {as.formula(paste(x, full_covars, sep=""))})
+
+## Extract GAM pvals 
+glasser_gam_models <- lapply(m, function(x) {gam(formula = x, data=hcpd_data, method="REML")})
+glasser_reduced_gam_models <- lapply(m2, function(x) {gam(formula = x, data=hcpd_data, method="REML")})
+glasser_age_resid <- lapply(glasser_reduced_gam_models, function(x) { resid(x)})
+
+glasser_SES_pvals <- lapply(glasser_gam_models, function(x) { summary(x)$p.table[2,4]})
+glasser_SES_pvals <- unlist(glasser_SES_pvals)
+glasser_SES_tstat <-unlist(lapply(glasser_gam_models, function(x) { summary(x)$p.table[2,3]}))
+
+## Multiple Comparison correction
+glasser_SES_pvals_corrected <- p.adjust(glasser_SES_pvals, method="holm")
+
+corrected_sig_index <- which(glasser_SES_pvals_corrected < 0.05)
+length(corrected_sig_index)
+
+uncorrected_sig_index <- which(glasser_SES_pvals < 0.005)
+length(uncorrected_sig_index)
+glasser_parcel_labels[uncorrected_sig_index,1]
+glasser_SES_pvals[uncorrected_sig_index]
+glasser_SES_tstat[uncorrected_sig_index]
+
+# Estimate effect on NETWORK myelin 
+network_gam_models <- NULL
+m <- NULL
+
+## Specify covariates
+full_covars=" ~  SES_Composite + s(age) + sex + site + Reference.Voltage + Mean.Pseudo.Transmit.Map + T2..Dropout.Threshold + Smoothing.FWHM.mm + Pseudotransmit.Reference.Value + Correction.Equation.Slope + Corrected.CSF.Regressor"   
+reduced_covars=" ~  s(age) + sex + site + Reference.Voltage + Mean.Pseudo.Transmit.Map + T2..Dropout.Threshold + Smoothing.FWHM.mm + Pseudotransmit.Reference.Value + Correction.Equation.Slope + Corrected.CSF.Regressor"   
+
+## Apply GAM across brain regions (columns of data-frame)
+m <- lapply(names(hcpd_data[,net_col_index]), function(x) {as.formula(paste(x, full_covars, sep=""))})
+m2<- lapply(names(hcpd_data[,net_col_index]), function(x) {as.formula(paste(x, full_covars, sep=""))})
+
+## Extract GAM pvals 
+network_gam_models <- lapply(m, function(x) {gam(formula = x, data=hcpd_data, method="REML")})
+network_SES_pvals <- lapply(network_gam_models, function(x) { summary(x)$p.table[2,4]})
+network_SES_pvals <- unlist(network_SES_pvals)
+network_SES_tstat <-unlist(lapply(network_gam_models, function(x) { summary(x)$p.table[2,3]}))
+
+## Multiple Comparison correction
+network_SES_pvals_corrected <- p.adjust(network_SES_pvals, method="holm")
+
+corrected_sig_index <- which(network_SES_pvals_corrected < 0.05)
+length(corrected_sig_index)
+
+uncorrected_sig_index <- which(network_SES_pvals < 0.005)
+length(uncorrected_sig_index)
+glasser_parcel_labels[uncorrected_sig_index,1]
+network_SES_pvals[uncorrected_sig_index]
+network_SES_tstat[uncorrected_sig_index]
+
+hist(network_SES_tstat, col="slategray3")
+
+
+
